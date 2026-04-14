@@ -63,39 +63,63 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     st.subheader("📊 Exploratory Data Analysis")
 
+    # -------- DATA SUMMARY --------
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write("### 📋 Dataset Summary")
+        st.dataframe(df.describe())
+
+    with col2:
+        st.write("### 🔥 Correlation Heatmap")
+        fig = px.imshow(numeric_df.corr())
+        st.plotly_chart(fig, use_container_width=True)
+
+    # -------- TARGET SELECTION --------
     target_eda = st.selectbox(
         "Select Target Variable",
         numeric_df.columns,
         key="eda_target"
     )
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.write("### Dataset Summary")
-        st.dataframe(df.describe())
-
-    with col2:
-        st.write("### Correlation Heatmap")
-        fig = px.imshow(numeric_df.corr())
-        st.plotly_chart(fig, use_container_width=True)
-
+    # -------- FEATURE SELECTION --------
     feature = st.selectbox(
         "Select Feature",
         numeric_df.columns,
         key="eda_feature"
     )
 
+    # -------- FEATURE DISTRIBUTION --------
+    st.write(f"### 📊 Distribution of {feature}")
     fig = px.histogram(df, x=feature)
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # -------- TARGET DISTRIBUTION --------
+    st.write(f"### 🎯 Distribution of Target ({target_eda})")
+    fig_target = px.histogram(df, x=target_eda)
+    st.plotly_chart(fig_target, use_container_width=True)
+
+    # -------- FEATURE VS TARGET --------
+    st.write(f"### 🔗 {feature} vs {target_eda}")
+    fig_scatter = px.scatter(
+        df,
+        x=feature,
+        y=target_eda,
+        title=f"{feature} vs {target_eda}"
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
 
 # ================== TAB 2 ==================
 with tab2:
-    st.subheader("🧹 Cleaning & Scaling")
+    st.subheader("🧹 Cleaning, Scaling & Outliers")
 
-    st.write("Missing Values")
+    df = st.session_state.get("df", df)
+
+    st.write("### Missing Values")
     st.write(df.isnull().sum())
 
+    # -------- SCALING --------
     scaler = MinMaxScaler()
 
     scale_cols = st.multiselect(
@@ -111,6 +135,34 @@ with tab2:
             df_scaled[col] = scaler.fit_transform(df[[col]])
         st.session_state["df"] = df_scaled
         st.success("Scaling Applied!")
+
+    # -------- OUTLIER DETECTION --------
+    st.write("### 🚨 Outlier Detection (IQR Method)")
+
+    outlier_col = st.selectbox(
+        "Select Column for Outlier Detection",
+        numeric_df.columns,
+        key="outlier_col"
+    )
+
+    Q1 = df[outlier_col].quantile(0.25)
+    Q3 = df[outlier_col].quantile(0.75)
+    IQR = Q3 - Q1
+
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+    outliers = df[(df[outlier_col] < lower) | (df[outlier_col] > upper)]
+
+    st.write(f"Detected Outliers: {len(outliers)}")
+
+    fig = px.box(df, y=outlier_col, title="Box Plot (Outliers)")
+    st.plotly_chart(fig)
+
+    if st.button("Remove Outliers"):
+        df_clean = df[(df[outlier_col] >= lower) & (df[outlier_col] <= upper)]
+        st.session_state["df"] = df_clean
+        st.success(f"Outliers removed! New shape: {df_clean.shape}")
 
 # ================== TAB 3 ==================
 with tab3:
@@ -252,4 +304,4 @@ with tab5:
         st.plotly_chart(fig, use_container_width=True)
 
     else:
-        st.warning("Train a model first!")
+        st.warning("Train a model first!")  
