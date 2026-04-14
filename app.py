@@ -1,0 +1,241 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+
+# ------------------ CONFIG ------------------
+st.set_page_config(page_title="ML Pipeline Dashboard", layout="wide")
+
+# ------------------ STYLE ------------------
+st.markdown("""
+<style>
+div[data-testid="stHorizontalBlock"] > div {
+    background-color: #1e1e1e;
+    padding: 15px;
+    border-radius: 12px;
+    color: white;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ------------------ TITLE ------------------
+st.title("🚀 Interactive ML Pipeline Dashboard")
+
+# ------------------ FILE UPLOAD ------------------
+st.sidebar.header("1. Data Source")
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.sidebar.success("File Uploaded!")
+
+    if 'Product_id' in df.columns:
+        df = df.drop('Product_id', axis=1)
+else:
+    st.warning("Upload dataset to proceed")
+    st.stop()
+
+# ------------------ TABS ------------------
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "Data & EDA",
+    "Cleaning",
+    "Feature Selection",
+    "Model Training",
+    "Performance"
+])
+
+# ================== TAB 1 ==================
+with tab1:
+    st.subheader("📊 Exploratory Data Analysis")
+
+    target_eda = st.selectbox(
+        "Select Target Variable",
+        df.columns,
+        key="eda_target"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write("### Dataset Summary")
+        st.dataframe(df.describe())
+
+    with col2:
+        st.write("### Correlation Heatmap")
+        fig = px.imshow(df.corr(), text_auto=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+    feature = st.selectbox(
+        "Select Feature",
+        df.columns,
+        key="eda_feature"
+    )
+
+    fig = px.histogram(df, x=feature)
+    st.plotly_chart(fig)
+
+# ================== TAB 2 ==================
+with tab2:
+    st.subheader("🧹 Cleaning & Scaling")
+
+    st.write("Missing Values")
+    st.write(df.isnull().sum())
+
+    scaler = MinMaxScaler()
+
+    scale_cols = st.multiselect(
+        "Columns to Scale",
+        df.columns,
+        default=[col for col in ['Sale','battery'] if col in df.columns],
+        key="scale_cols"
+    )
+
+    if st.button("Apply Scaling"):
+        for col in scale_cols:
+            df[col] = scaler.fit_transform(df[[col]])
+        st.success("Scaling Applied!")
+
+# ================== TAB 3 ==================
+with tab3:
+    st.subheader("🎯 Feature Selection")
+
+    target_fs = st.selectbox(
+        "Select Target Variable",
+        df.columns,
+        key="fs_target"
+    )
+
+    st.session_state["target"] = target_fs
+
+    X = df.drop(target_fs, axis=1)
+    y = df[target_fs]
+
+    # Correlation
+    st.write("### 📊 Correlation with Target")
+    corr = df.corr()[target_fs].sort_values(ascending=False)
+
+    fig_corr = px.bar(corr, title="Correlation with Target")
+    st.plotly_chart(fig_corr)
+
+    # Feature Importance
+    st.write("### 🌳 Feature Importance")
+    model = RandomForestRegressor()
+    model.fit(X, y)
+
+    importance = pd.DataFrame({
+        "Feature": X.columns,
+        "Importance": model.feature_importances_
+    }).sort_values(by="Importance", ascending=False)
+
+    fig_imp = px.bar(importance, x="Feature", y="Importance")
+    st.plotly_chart(fig_imp)
+
+    st.dataframe(importance)
+
+    use_top_features = st.checkbox("Use Top Important Features Only")
+
+    if use_top_features:
+        selected_features = list(importance["Feature"].head(5))
+        st.info("Using top 5 important features automatically")
+    else:
+        selected_features = st.multiselect(
+            "Select Features",
+            X.columns,
+            default=list(X.columns),
+            key="feature_select"
+        )
+
+    st.session_state["features"] = selected_features
+
+# ================== TAB 4 ==================
+with tab4:
+    st.subheader("🤖 Model Training")
+
+    target = st.session_state.get("target", df.columns[-1])
+    features = st.session_state.get("features", df.columns[:-1])
+
+    X = df[features]
+    y = df[target]
+
+    test_size = st.slider("Test Size", 0.1, 0.5, 0.3, key="test_size")
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=42
+    )
+
+    model_name = st.selectbox(
+        "Select Model",
+        ["Linear Regression", "KNN", "Decision Tree", "Random Forest"],
+        key="model_select"
+    )
+
+    if model_name == "Linear Regression":
+        model = LinearRegression()
+
+    elif model_name == "KNN":
+        k = st.slider("K Value", 1, 20, 11, key="knn_k")
+        model = KNeighborsRegressor(n_neighbors=k)
+
+    elif model_name == "Decision Tree":
+        depth = st.slider("Depth", 1, 20, 9, key="dt_depth")
+        model = DecisionTreeRegressor(max_depth=depth)
+
+    else:
+        model = RandomForestRegressor()
+
+    if st.button("🚀 Train Model"):
+        model.fit(X_train, y_train)
+
+        st.session_state["model"] = model
+        st.session_state["X_test"] = X_test
+        st.session_state["y_test"] = y_test
+
+        st.success("Model Trained Successfully!")
+
+# ================== TAB 5 ==================
+with tab5:
+    st.subheader("📈 Performance")
+
+    if "model" in st.session_state:
+        model = st.session_state["model"]
+        X_test = st.session_state["X_test"]
+        y_test = st.session_state["y_test"]
+
+        pred = model.predict(X_test)
+
+        # ✅ ADD THIS (IMPORTANT)
+        mae = mean_absolute_error(y_test, pred)
+        mse = mean_squared_error(y_test, pred)
+        r2 = r2_score(y_test, pred)
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("📉 MAE", f"{mae:.2f}")
+
+        with col2:
+            st.metric("📊 MSE", f"{mse:.2f}")
+
+        with col3:
+            st.metric("📈 R²", f"{r2:.3f}")
+
+        st.write("### Actual vs Predicted")
+
+        fig = px.scatter(
+            x=y_test,
+            y=pred,
+            labels={'x': "Actual", 'y': "Predicted"},
+            title="Actual vs Predicted"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    else:
+        st.warning("Train a model first!")
