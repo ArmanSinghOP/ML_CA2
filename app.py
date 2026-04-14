@@ -73,7 +73,7 @@ with tab1:
     with col2:
         st.write("### 🔥 Correlation Heatmap")
         fig = px.imshow(numeric_df.corr())
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="heatmap_tab1")
 
     # -------- TARGET SELECTION --------
     target_eda = st.selectbox(
@@ -92,12 +92,12 @@ with tab1:
     # -------- FEATURE DISTRIBUTION --------
     st.write(f"### 📊 Distribution of {feature}")
     fig = px.histogram(df, x=feature)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="feature_hist_tab1")
 
     # -------- TARGET DISTRIBUTION --------
     st.write(f"### 🎯 Distribution of Target ({target_eda})")
     fig_target = px.histogram(df, x=target_eda)
-    st.plotly_chart(fig_target, use_container_width=True)
+    st.plotly_chart(fig_target, use_container_width=True, key="target_hist_tab1")
 
     # -------- FEATURE VS TARGET --------
     st.write(f"### 🔗 {feature} vs {target_eda}")
@@ -107,7 +107,7 @@ with tab1:
         y=target_eda,
         title=f"{feature} vs {target_eda}"
     )
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    st.plotly_chart(fig_scatter, use_container_width=True, key="scatter_tab1")
 
 
 # ================== TAB 2 ==================
@@ -157,7 +157,7 @@ with tab2:
     st.write(f"Detected Outliers: {len(outliers)}")
 
     fig = px.box(df, y=outlier_col, title="Box Plot (Outliers)")
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, key="box_tab2")
 
     if st.button("Remove Outliers"):
         df_clean = df[(df[outlier_col] >= lower) & (df[outlier_col] <= upper)]
@@ -186,7 +186,7 @@ with tab3:
     corr = df.corr()[target_fs].sort_values(ascending=False)
 
     fig_corr = px.bar(corr, title="Correlation with Target")
-    st.plotly_chart(fig_corr)
+    st.plotly_chart(fig_corr, key="corr_tab3")
 
     # Feature Importance
     st.write("### 🌳 Feature Importance")
@@ -199,7 +199,7 @@ with tab3:
     }).sort_values(by="Importance", ascending=False)
 
     fig_imp = px.bar(importance, x="Feature", y="Importance")
-    st.plotly_chart(fig_imp)
+    st.plotly_chart(fig_imp, key="importance_tab3")
 
     st.dataframe(importance)
 
@@ -301,7 +301,7 @@ with tab5:
             labels={'x': "Actual", 'y': "Predicted"},
             title="Actual vs Predicted"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="actual_pred_tab5")
 
     else:
         st.warning("Train a model first!")  
