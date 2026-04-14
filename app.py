@@ -33,15 +33,22 @@ st.title("🚀 Interactive ML Pipeline Dashboard")
 st.sidebar.header("1. Data Source")
 uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.sidebar.success("File Uploaded!")
-
+@st.cache_data
+def load_data(file):
+    df = pd.read_csv(file)
     if 'Product_id' in df.columns:
         df = df.drop('Product_id', axis=1)
+    return df
+
+if uploaded_file:
+    df = load_data(uploaded_file)
+    st.sidebar.success("File Uploaded!")
 else:
     st.warning("Upload dataset to proceed")
     st.stop()
+
+# ------------------ SAFE NUMERIC DATA ------------------
+numeric_df = df.select_dtypes(include='number')
 
 # ------------------ TABS ------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -58,7 +65,7 @@ with tab1:
 
     target_eda = st.selectbox(
         "Select Target Variable",
-        df.columns,
+        numeric_df.columns,
         key="eda_target"
     )
 
@@ -70,12 +77,12 @@ with tab1:
 
     with col2:
         st.write("### Correlation Heatmap")
-        fig = px.imshow(df.corr(), text_auto=True)
+        fig = px.imshow(numeric_df.corr())
         st.plotly_chart(fig, use_container_width=True)
 
     feature = st.selectbox(
         "Select Feature",
-        df.columns,
+        numeric_df.columns,
         key="eda_feature"
     )
 
@@ -93,23 +100,27 @@ with tab2:
 
     scale_cols = st.multiselect(
         "Columns to Scale",
-        df.columns,
-        default=[col for col in ['Sale','battery'] if col in df.columns],
+        numeric_df.columns,
+        default=[col for col in ['Sale','battery'] if col in numeric_df.columns],
         key="scale_cols"
     )
 
     if st.button("Apply Scaling"):
+        df_scaled = df.copy()
         for col in scale_cols:
-            df[col] = scaler.fit_transform(df[[col]])
+            df_scaled[col] = scaler.fit_transform(df[[col]])
+        st.session_state["df"] = df_scaled
         st.success("Scaling Applied!")
 
 # ================== TAB 3 ==================
 with tab3:
     st.subheader("🎯 Feature Selection")
 
+    df = st.session_state.get("df", df)
+
     target_fs = st.selectbox(
         "Select Target Variable",
-        df.columns,
+        numeric_df.columns,
         key="fs_target"
     )
 
@@ -153,14 +164,20 @@ with tab3:
             key="feature_select"
         )
 
+    if len(selected_features) == 0:
+        st.warning("Select at least one feature!")
+        st.stop()
+
     st.session_state["features"] = selected_features
 
 # ================== TAB 4 ==================
 with tab4:
     st.subheader("🤖 Model Training")
 
-    target = st.session_state.get("target", df.columns[-1])
-    features = st.session_state.get("features", df.columns[:-1])
+    df = st.session_state.get("df", df)
+
+    target = st.session_state.get("target", numeric_df.columns[-1])
+    features = st.session_state.get("features", numeric_df.columns[:-1])
 
     X = df[features]
     y = df[target]
@@ -192,13 +209,16 @@ with tab4:
         model = RandomForestRegressor()
 
     if st.button("🚀 Train Model"):
-        model.fit(X_train, y_train)
+        try:
+            model.fit(X_train, y_train)
 
-        st.session_state["model"] = model
-        st.session_state["X_test"] = X_test
-        st.session_state["y_test"] = y_test
+            st.session_state["model"] = model
+            st.session_state["X_test"] = X_test
+            st.session_state["y_test"] = y_test
 
-        st.success("Model Trained Successfully!")
+            st.success("Model Trained Successfully!")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # ================== TAB 5 ==================
 with tab5:
@@ -211,21 +231,15 @@ with tab5:
 
         pred = model.predict(X_test)
 
-        # ✅ ADD THIS (IMPORTANT)
         mae = mean_absolute_error(y_test, pred)
         mse = mean_squared_error(y_test, pred)
         r2 = r2_score(y_test, pred)
 
         col1, col2, col3 = st.columns(3)
 
-        with col1:
-            st.metric("📉 MAE", f"{mae:.2f}")
-
-        with col2:
-            st.metric("📊 MSE", f"{mse:.2f}")
-
-        with col3:
-            st.metric("📈 R²", f"{r2:.3f}")
+        col1.metric("📉 MAE", f"{mae:.2f}")
+        col2.metric("📊 MSE", f"{mse:.2f}")
+        col3.metric("📈 R²", f"{r2:.3f}")
 
         st.write("### Actual vs Predicted")
 
