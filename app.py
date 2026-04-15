@@ -51,12 +51,13 @@ else:
 numeric_df = df.select_dtypes(include='number')
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Data & EDA",
     "Cleaning",
     "Feature Selection",
     "Model Training",
-    "Performance"
+    "Performance",
+    "Prediction"
 ])
 
 # ================== TAB 1 ==================
@@ -66,6 +67,13 @@ with tab1:
     # -------- DATA SUMMARY --------
     col1, col2 = st.columns(2)
 
+    # -------- TARGET SELECTION --------
+    target_eda = st.selectbox(
+        "Select Target Variable",
+        numeric_df.columns,
+        key="eda_target"
+    )
+
     with col1:
         st.write("### 📋 Dataset Summary")
         st.dataframe(df.describe())
@@ -74,13 +82,6 @@ with tab1:
         st.write("### 🔥 Correlation Heatmap")
         fig = px.imshow(numeric_df.corr())
         st.plotly_chart(fig, use_container_width=True, key="heatmap_tab1")
-
-    # -------- TARGET SELECTION --------
-    target_eda = st.selectbox(
-        "Select Target Variable",
-        numeric_df.columns,
-        key="eda_target"
-    )
 
     # -------- FEATURE SELECTION --------
     feature = st.selectbox(
@@ -304,4 +305,37 @@ with tab5:
         st.plotly_chart(fig, use_container_width=True, key="actual_pred_tab5")
 
     else:
-        st.warning("Train a model first!")  
+        st.warning("Train a model first!")
+
+# ================== TAB 6 ==================
+with tab6:
+    st.subheader("🔮 Prediction")
+
+    if "model" in st.session_state:
+        model = st.session_state["model"]
+        df = st.session_state.get("df", df)
+
+        target = st.session_state.get("target", numeric_df.columns[-1])
+        features = st.session_state.get("features", numeric_df.columns[:-1])
+
+        st.write("### Enter Feature Values")
+
+        input_data = []
+
+        for col in features:
+            val = st.number_input(
+                f"{col}",
+                value=float(df[col].mean()),
+                key=f"pred_{col}"
+            )
+            input_data.append(val)
+
+        if st.button("Predict"):
+            try:
+                prediction = model.predict([input_data])
+                st.success(f"🎯 Predicted {target}: {prediction[0]:.2f}")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    else:
+        st.warning("Train a model first!")
